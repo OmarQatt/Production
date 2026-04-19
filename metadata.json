@@ -1,0 +1,15 @@
+{
+  "name": "CinePro Marketplace",
+  "description": "A professional marketplace for film production locations, equipment, models, and crew. Facilitating talent management, equipment rentals, and location scouting with evidence-based tracking and expert facilitation.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "marketplace",
+    "auth",
+    "booking",
+    "reviews",
+    "maps"
+  ]
+}

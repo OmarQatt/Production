@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Playfair Display", serif;
+  --font-mono: "JetBrains Mono", monospace;
+  
+  --color-brand-gold: #D4AF37;
+  --color-brand-dark: #0A0A0A;
+}
+
+@layer base {
+  body {
+    @apply bg-brand-dark text-white font-sans antialiased;
+  }
+}
+
+@layer utilities {
+  .text-luxury {
+    @apply font-serif italic tracking-tight;
+  }
+  
+  .glass {
+    @apply bg-white/5 backdrop-blur-lg border border-white/10;
+  }
+  
+  .gold-gradient {
+    @apply bg-linear-to-tr from-brand-gold/80 to-brand-gold;
+  }
+}

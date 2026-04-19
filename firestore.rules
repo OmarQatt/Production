@@ -1,0 +1,141 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 0. Catch-all: Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- PRIMITIVES & HELPERS ---
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function getUserData(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data;
+    }
+
+    function hasRole(role) {
+      return isSignedIn() && getUserData(request.auth.uid).role == role;
+    }
+
+    function isAdmin() {
+      return hasRole('admin');
+    }
+
+    function isEmployee() {
+      return hasRole('employee') || isAdmin();
+    }
+
+    // --- VALIDATION HELPERS ---
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['email', 'displayName', 'role']) &&
+             data.keys().size() <= 6 && // allows for optional photoURL/bio
+             data.email is string && data.email.size() <= 256 &&
+             data.displayName is string && data.displayName.size() <= 100 &&
+             data.role in ['client', 'freelancer', 'company', 'employee', 'admin'];
+    }
+
+    function isValidLocation(data) {
+      return data.keys().hasAll(['ownerId', 'name', 'pricePerDay', 'status']) &&
+             data.ownerId == request.auth.uid &&
+             data.name is string && data.name.size() <= 150 &&
+             data.pricePerDay is int && data.pricePerDay > 0 &&
+             data.status in ['pending', 'active', 'inactive'];
+    }
+
+    function isValidEquipment(data) {
+      return data.keys().hasAll(['companyId', 'name', 'pricePerDay', 'status']) &&
+             data.companyId == request.auth.uid &&
+             data.name is string && data.name.size() <= 150 &&
+             data.pricePerDay is int && data.pricePerDay > 0 &&
+             data.status in ['available', 'rented', 'maintenance'];
+    }
+
+    function isValidTalent(data) {
+      return data.keys().hasAll(['userId', 'type', 'experience']) &&
+             data.userId == request.auth.uid &&
+             data.type in ['model', 'crew'] &&
+             data.experience is string && data.experience.size() <= 2000;
+    }
+
+    function isValidBooking(data) {
+      return data.keys().hasAll(['clientId', 'serviceId', 'serviceType', 'startDate', 'endDate', 'totalPrice', 'status']) &&
+             data.clientId == request.auth.uid &&
+             data.totalPrice is int && data.totalPrice > 0 &&
+             data.status in ['pending', 'confirmed', 'cancelled', 'completed'];
+    }
+
+    // --- COLLECTIONS ---
+
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow list: if isAdmin();
+      allow create: if isOwner(userId) && isValidUser(incoming()) && incoming().role != 'admin' && incoming().role != 'employee';
+      allow update: if isOwner(userId) && isValidUser(incoming()) && 
+                    incoming().role == existing().role && // Prevent self-role-escalation
+                    incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'bio']);
+      allow delete: if isAdmin();
+    }
+
+    match /locations/{locationId} {
+      allow get: if isSignedIn() && (
+        isOwner(existing().ownerId) || isEmployee() || (existing().status == 'active' && !('address' in incoming()))
+      );
+      allow list: if isSignedIn() && resource.data.status == 'active';
+      allow create: if isSignedIn() && isValidLocation(incoming()) && incoming().status == 'pending';
+      allow update: if (isOwner(existing().ownerId) && isValidLocation(incoming()) && 
+                        incoming().status == existing().status && // Owners can't self-approve
+                        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'pricePerDay', 'photos'])) ||
+                    (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['status']));
+      allow delete: if isOwner(existing().ownerId) || isAdmin();
+    }
+
+    match /equipment/{equipmentId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidEquipment(incoming());
+      allow update: if (isOwner(existing().companyId) && isValidEquipment(incoming()) && 
+                        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'pricePerDay', 'photos', 'status'])) ||
+                    (isAdmin());
+      allow delete: if isOwner(existing().companyId) || isAdmin();
+    }
+
+    match /talent/{talentId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidTalent(incoming());
+      allow update: if (isOwner(existing().userId) && isValidTalent(incoming()) && 
+                        incoming().diff(existing()).affectedKeys().hasOnly(['experience', 'gender', 'age', 'skinTone', 'height', 'weight', 'location', 'positions'])) ||
+                    (isAdmin());
+      allow delete: if isOwner(existing().userId) || isAdmin();
+    }
+
+    match /bookings/{bookingId} {
+      allow get: if isSignedIn() && (isOwner(existing().clientId) || isOwner(getUserData(existing().serviceId).userId) || isEmployee());
+      allow list: if isSignedIn() && (resource.data.clientId == request.auth.uid || isEmployee());
+      allow create: if isSignedIn() && isValidBooking(incoming()) && incoming().status == 'pending';
+      allow update: if isSignedIn() && (
+        (isOwner(existing().clientId) && incoming().diff(existing()).affectedKeys().hasOnly(['status']) && incoming().status == 'cancelled') ||
+        (isEmployee() && incoming().diff(existing()).affectedKeys().hasOnly(['status']))
+      );
+    }
+  }
+}

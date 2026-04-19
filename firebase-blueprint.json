@@ -1,0 +1,102 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User profile data including roles and public info.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["client", "freelancer", "company", "employee", "admin"] },
+        "photoURL": { "type": "string" }
+      },
+      "required": ["email", "displayName", "role"]
+    },
+    "Location": {
+      "title": "Filming Location",
+      "description": "Physical space for filming with approval workflow.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "type": { "type": "string" },
+        "city": { "type": "string" },
+        "address": { "type": "string" },
+        "pricePerDay": { "type": "integer" },
+        "photos": { "type": "array", "items": { "type": "string" } },
+        "status": { "type": "string", "enum": ["pending", "active", "inactive"] }
+      },
+      "required": ["ownerId", "name", "pricePerDay", "status"]
+    },
+    "Equipment": {
+      "title": "Film Equipment",
+      "description": "Camera, lighting, or specialized gear for rent.",
+      "type": "object",
+      "properties": {
+        "companyId": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "pricePerDay": { "type": "integer" },
+        "photos": { "type": "array", "items": { "type": "string" } },
+        "status": { "type": "string", "enum": ["available", "rented", "maintenance"] }
+      },
+      "required": ["companyId", "name", "pricePerDay", "status"]
+    },
+    "Talent": {
+      "title": "Talent/Crew Profile",
+      "description": "Experience and attributes for models or crew.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["model", "crew"] },
+        "experience": { "type": "string" },
+        "gender": { "type": "string", "enum": ["male", "female", "other"] },
+        "age": { "type": "integer" },
+        "skinTone": { "type": "string" },
+        "height": { "type": "integer" },
+        "weight": { "type": "integer" },
+        "location": { "type": "string" },
+        "positions": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["userId", "type", "experience"]
+    },
+    "Booking": {
+      "title": "Service Booking",
+      "description": "Rental or booking event for services.",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "serviceId": { "type": "string" },
+        "serviceType": { "type": "string", "enum": ["location", "equipment", "talent"] },
+        "startDate": { "type": "string", "format": "date-time" },
+        "endDate": { "type": "string", "format": "date-time" },
+        "totalPrice": { "type": "integer" },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "cancelled", "completed"] }
+      },
+      "required": ["clientId", "serviceId", "serviceType", "startDate", "endDate", "totalPrice", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Public and core user profiles."
+    },
+    "/locations/{locationId}": {
+      "schema": "Location",
+      "description": "Marketplace location listings."
+    },
+    "/equipment/{equipmentId}": {
+      "schema": "Equipment",
+      "description": "Equipment rental listings."
+    },
+    "/talent/{talentId}": {
+      "schema": "Talent",
+      "description": "Detailed talent/crew data."
+    },
+    "/bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "Booking and rental transactions."
+    }
+  }
+}

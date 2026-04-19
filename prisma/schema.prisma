@@ -1,0 +1,113 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum UserRole {
+  CLIENT
+  FREELANCER
+  COMPANY
+  EMPLOYEE
+  ADMIN
+}
+
+model User {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  displayName String
+  role        UserRole @default(CLIENT)
+  photoURL    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  listings    Location[]
+  equipment   Equipment[]
+  talent      Talent?
+  bookings    Booking[]
+  reviews     Review[]
+}
+
+model Location {
+  id          String    @id @default(uuid())
+  ownerId     String
+  owner       User      @relation(fields: [ownerId], references: [id])
+  name        String
+  description String
+  type        String
+  city        String
+  address     String    // Only visible to admin/employees/owner
+  pricePerDay Int
+  photos      String    // Stored as JSON string or comma-separated for SQLite
+  status      String    @default("PENDING") // PENDING, ACTIVE, INACTIVE
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  bookings    Booking[]
+}
+
+model Equipment {
+  id          String    @id @default(uuid())
+  companyId   String
+  company     User      @relation(fields: [companyId], references: [id])
+  name        String
+  description String
+  pricePerDay Int
+  photos      String    // Stored as JSON string
+  status      String    @default("AVAILABLE") // AVAILABLE, RENTED, MAINTENANCE
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  bookings    Booking[]
+}
+
+model Talent {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id])
+  type        String   // MODEL, CREW
+  experience  String
+  gender      String
+  age         Int
+  skinTone    String?
+  height      Int?
+  weight      Int?
+  city        String
+  positions   String?  // JSON string
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Booking {
+  id          String   @id @default(uuid())
+  clientId    String
+  client      User     @relation(fields: [clientId], references: [id])
+  serviceId   String
+  serviceType String   // LOCATION, EQUIPMENT, TALENT
+  startDate   DateTime
+  endDate     DateTime
+  totalPrice  Int
+  status      String   @default("PENDING") // PENDING, CONFIRMED, CANCELLED, COMPLETED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // These are optional relations for easier querying depending on type
+  location    Location? @relation(fields: [serviceId], references: [id])
+  equipment   Equipment? @relation(fields: [serviceId], references: [id])
+}
+
+model Review {
+  id          String   @id @default(uuid())
+  targetId    String
+  authorId    String
+  author      User     @relation(fields: [authorId], references: [id])
+  authorName  String
+  rating      Int
+  comment     String
+  createdAt   DateTime @default(now())
+}
