@@ -231,6 +231,90 @@ async function startServer() {
     }
   });
 
+  // Favorites: Toggle
+  app.post('/api/favorites/toggle', async (req, res) => {
+    const { userId, targetId, targetType } = req.body;
+    try {
+      const existing = await prisma.favorite.findUnique({
+        where: { userId_targetId: { userId, targetId } }
+      });
+
+      if (existing) {
+        await prisma.favorite.delete({ where: { id: existing.id } });
+        return res.json({ favorited: false });
+      } else {
+        await prisma.favorite.create({
+          data: { userId, targetId, targetType }
+        });
+        return res.json({ favorited: true });
+      }
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to toggle favorite' });
+    }
+  });
+
+  // Favorites: Status
+  app.get('/api/favorites/status', async (req, res) => {
+    const { userId, targetId } = req.query;
+    try {
+      const existing = await prisma.favorite.findUnique({
+        where: { userId_targetId: { userId: userId as string, targetId: targetId as string } }
+      });
+      res.json({ favorited: !!existing });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to check favorite status' });
+    }
+  });
+
+  // Services: Related Items
+  app.get('/api/services/:id/related', async (req, res) => {
+    const { id } = req.params;
+    const { type, serviceType } = req.query;
+    try {
+      let items: any[] = [];
+      if (serviceType === 'LOCATION') {
+        items = await prisma.location.findMany({
+          where: { 
+            type: type as string,
+            id: { not: id }
+          },
+          take: 8
+        });
+      } else if (serviceType === 'EQUIPMENT') {
+        items = await prisma.equipment.findMany({
+          where: { 
+            type: type as string,
+            id: { not: id }
+          },
+          take: 8
+        });
+      }
+      res.json(items);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch related items' });
+    }
+  });
+
+  // Negotiations: Send Message
+  app.post('/api/negotiate', async (req, res) => {
+    const { senderId, receiverId, targetId, content, priceOffer } = req.body;
+    try {
+      const message = await prisma.message.create({
+        data: {
+          senderId,
+          receiverId: receiverId || 'admin-1', // Default to admin for now if no owner
+          targetId,
+          content,
+          priceOffer: priceOffer ? parseInt(priceOffer.toString()) : null
+        }
+      });
+      res.json(message);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Failed to send message' });
+    }
+  });
+
   // --- VITE MIDDLEWARE ---
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
-import { Camera, MapPin, Users, Package, Home, Search, Calendar, User, ShieldCheck } from 'lucide-react';
+import { Camera, MapPin, Users, Package, Home, Search, Calendar, User, ShieldCheck, Sparkles, Wand2 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { useState, useEffect } from 'react';
@@ -7,6 +7,7 @@ import ProjectDetail from './pages/ProjectDetail';
 import ModelSearch from './pages/ModelSearch';
 import UserProfile from './pages/UserProfile';
 import ReviewModal from './components/ReviewModal';
+import StudioLab from './pages/StudioLab';
 
 // Placeholder Pages
 const HomePage = () => (
@@ -38,7 +39,7 @@ const HomePage = () => (
         { icon: MapPin, title: "Locations", desc: "Vetted interior and exterior filming spaces.", path: "/discovery" },
         { icon: Package, title: "Equipment", desc: "Top-tier camera and lighting rentals.", path: "/project/1" },
         { icon: Users, title: "Talent", desc: "Professional models and casting profiles.", path: "/talent" },
-        { icon: Camera, title: "Crew", desc: "Experienced DP, ACs, and photographers.", path: "/talent" }
+        { icon: Wand2, title: "Studio Lab", desc: "AI-powered mood boards and concept art.", path: "/lab" }
       ].map((feature, i) => (
         <Link 
           to={feature.path}
@@ -469,6 +470,9 @@ export default function App() {
             <div className="hidden md:flex items-center gap-8 text-sm font-medium text-zinc-400">
               <Link to="/discovery" className="hover:text-white transition-colors">Marketplace</Link>
               <Link to="/bookings" className="hover:text-white transition-colors">Bookings</Link>
+              <Link to="/lab" className="hover:text-brand-gold transition-colors flex items-center gap-2">
+                <Sparkles className="w-4 h-4" /> Studio Lab
+              </Link>
               <Link to="/admin" className="hover:text-white transition-colors">Admin</Link>
             </div>
 
@@ -492,6 +496,7 @@ export default function App() {
           <Route path="/project/:id" element={<ProjectDetail />} />
           <Route path="/bookings" element={<BookingManagement />} />
           <Route path="/profile" element={<UserProfile />} />
+          <Route path="/lab" element={<StudioLab />} />
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="*" element={<div className="pt-32 text-center text-zinc-500 font-serif text-3xl">Coming soon...</div>} />
         </Routes>

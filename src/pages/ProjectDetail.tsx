@@ -1,9 +1,14 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Calendar as CalendarIcon, Clock, Shield, MapPin, Star, User, Camera, Info, CheckCircle2, ArrowRight, Package } from 'lucide-react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { 
+  Calendar as CalendarIcon, Clock, Shield, MapPin, Star, User, Camera, Info, 
+  CheckCircle2, ArrowRight, Package, Heart, Share2, MessageCircle, AlertCircle, ChevronRight 
+} from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import CustomCalendar from '../components/CustomCalendar';
+import ShareModal from '../components/ShareModal';
+import NegotiateModal from '../components/NegotiateModal';
 import { differenceInDays, format } from 'date-fns';
 
 export default function ProjectDetail() {
@@ -11,9 +16,16 @@ export default function ProjectDetail() {
   const navigate = useNavigate();
   const [project, setProject] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [relatedItems, setRelatedItems] = useState<any[]>([]);
+  const [isFavorited, setIsFavorited] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [showNegotiateModal, setShowNegotiateModal] = useState(false);
   const [selectedRange, setSelectedRange] = useState<{ start: Date | null; end: Date | null }>({ start: null, end: null });
   const [showEvidenceUpload, setShowEvidenceUpload] = useState(false);
   const [bookingStatus, setBookingStatus] = useState<'idle' | 'booking' | 'success'>('idle');
+
+  const userId = 'admin-1'; // Mocking current user
 
   const duration = useMemo(() => {
     if (selectedRange.start && selectedRange.end) {
@@ -28,14 +40,48 @@ export default function ProjectDetail() {
   }, [project, duration]);
 
   useEffect(() => {
-    fetch(`/api/services/${id}`)
-      .then(res => res.json())
-      .then(data => {
+    const fetchData = async () => {
+      setLoading(true);
+      setFetchError(null);
+      try {
+        const res = await fetch(`/api/services/${id}`);
+        if (!res.ok) throw new Error('Could not retrieve service details.');
+        const data = await res.json();
         setProject(data);
+
+        // Fetch Favorite Status
+        const favRes = await fetch(`/api/favorites/status?userId=${userId}&targetId=${id}`);
+        const favData = await favRes.json();
+        setIsFavorited(favData.favorited);
+
+        // Fetch Related Items
+        const relRes = await fetch(`/api/services/${id}/related?serviceType=${data.serviceType}&type=${data.type}`);
+        const relData = await relRes.json();
+        setRelatedItems(relData);
+
+      } catch (err: any) {
+        setFetchError(err.message || 'An unexpected production error occurred.');
+      } finally {
         setLoading(false);
-      })
-      .catch(() => setLoading(false));
+      }
+    };
+
+    fetchData();
   }, [id]);
+
+  const toggleFavorite = async () => {
+    try {
+      const res = await fetch('/api/favorites/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, targetId: id, targetType: project.serviceType })
+      });
+      const data = await res.json();
+      setIsFavorited(data.favorited);
+    } catch (err) {
+      console.error('Failed to toggle favorite');
+    }
+  };
 
   const handleBooking = async () => {
     if (!selectedRange.start || !selectedRange.end) {
@@ -66,31 +112,88 @@ export default function ProjectDetail() {
     }
   };
 
-  if (loading) return <div className="pt-32 text-center text-zinc-500 font-serif">Loading masterpiece...</div>;
-  if (!project) return <div className="pt-32 text-center text-zinc-500 font-serif text-2xl">Location listing not found.</div>;
+  if (loading) return (
+    <div className="pt-32 flex flex-col items-center justify-center space-y-4">
+      <div className="w-12 h-12 border-4 border-brand-gold/10 border-t-brand-gold rounded-full animate-spin" />
+      <span className="text-zinc-500 font-serif lowercase italic">Developing capture...</span>
+    </div>
+  );
+
+  if (fetchError || !project) return (
+    <div className="pt-32 px-6 max-w-lg mx-auto text-center space-y-8">
+      <div className="w-20 h-20 bg-red-500/10 rounded-[2.5rem] flex items-center justify-center mx-auto">
+         <AlertCircle className="w-10 h-10 text-red-500" />
+      </div>
+      <div className="space-y-2">
+        <h2 className="text-3xl font-serif">Selection Not Found</h2>
+        <p className="text-zinc-500 font-light italic">{fetchError || 'The requested listing is no longer available in the pool.'}</p>
+      </div>
+      <button 
+        onClick={() => navigate('/discovery')}
+        className="px-8 py-3 bg-white/5 border border-white/10 rounded-2xl text-xs uppercase font-bold tracking-widest hover:bg-white/10 transition-colors"
+      >
+        Return to Discovery
+      </button>
+    </div>
+  );
 
   return (
-    <div className="pt-24 px-6 max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-12 pb-32">
-      {/* Left Contents: Visuals & Info */}
-      <div className="lg:col-span-2 space-y-12">
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 text-brand-gold font-mono text-xs tracking-widest uppercase">
-            <Package className="w-3 h-3" />
-            Product Listing
-          </div>
-          <h1 className="text-5xl font-serif tracking-tight">{project.name}</h1>
-          <div className="flex items-center gap-6 text-sm text-zinc-400">
-            <div className="flex items-center gap-1">
-              <Star className="w-4 h-4 text-brand-gold fill-brand-gold" />
-              <span className="text-white font-bold">New</span>
-              <span>(No reviews yet)</span>
+    <div className="pt-24 px-6 max-w-7xl mx-auto pb-32">
+      <ShareModal 
+        isOpen={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        url={window.location.href}
+        title={project.name}
+      />
+      
+      <NegotiateModal 
+        isOpen={showNegotiateModal}
+        onClose={() => setShowNegotiateModal(false)}
+        service={project}
+        onSuccess={() => {}}
+      />
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+        {/* Left Contents: Visuals & Info */}
+        <div className="lg:col-span-2 space-y-12">
+          <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-brand-gold font-mono text-xs tracking-widest uppercase">
+                <Package className="w-3 h-3" />
+                {project.serviceType} Listing
+              </div>
+              <h1 className="text-5xl font-serif tracking-tight">{project.name}</h1>
+              <div className="flex items-center gap-6 text-sm text-zinc-400">
+                <div className="flex items-center gap-1">
+                  <Star className="w-4 h-4 text-brand-gold fill-brand-gold" />
+                  <span className="text-white font-bold">4.8</span>
+                  <span>(12 Verified)</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <User className="w-4 h-4" />
+                  <span>By {project.owner?.displayName || 'Studio Admin'}</span>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-1">
-              <User className="w-4 h-4" />
-              <span>By {project.owner?.displayName}</span>
+
+            <div className="flex gap-3">
+              <button 
+                onClick={toggleFavorite}
+                className={cn(
+                  "p-4 rounded-2xl border transition-all active:scale-90",
+                  isFavorited ? "bg-red-500/10 border-red-500/30 text-red-500" : "bg-white/5 border-white/10 text-zinc-500 hover:text-white"
+                )}
+              >
+                <Heart className={cn("w-5 h-5", isFavorited && "fill-current")} />
+              </button>
+              <button 
+                onClick={() => setShowShareModal(true)}
+                className="p-4 rounded-2xl bg-white/5 border border-white/10 text-zinc-500 hover:text-white transition-all active:scale-90"
+              >
+                <Share2 className="w-5 h-5" />
+              </button>
             </div>
           </div>
-        </div>
 
         {/* Gallery */}
         <div className="grid grid-cols-2 gap-4 h-[500px]">
@@ -302,6 +405,63 @@ export default function ProjectDetail() {
             <Shield className="w-3 h-3 text-zinc-700" />
             Certified CinePro Listing
           </div>
+
+          <button 
+            onClick={() => setShowNegotiateModal(true)}
+            className="w-full py-4 border border-white/5 bg-white/[0.02] text-zinc-500 rounded-3xl text-[10px] font-bold uppercase tracking-widest hover:text-white hover:bg-white/5 transition-all flex items-center justify-center gap-2"
+          >
+             <MessageCircle className="w-4 h-4" />
+             Negotiate Studio Rate
+          </button>
+        </div>
+      </div>
+    </div>
+
+      {/* Related Items Section */}
+      <div className="col-span-1 lg:col-span-3 pt-12 border-t border-white/5 space-y-8">
+        <div className="flex items-center justify-between">
+           <div className="space-y-1">
+              <h3 className="text-3xl font-serif">Related Essentials</h3>
+              <p className="text-zinc-500 text-sm font-light">Similar professional results based on your current selection.</p>
+           </div>
+           <button 
+             onClick={() => navigate('/discovery')}
+             className="text-[10px] font-black uppercase tracking-widest text-brand-gold hover:underline flex items-center gap-2"
+           >
+              Explore All <ChevronRight className="w-3 h-3" />
+           </button>
+        </div>
+
+        <div className="flex overflow-x-auto gap-8 pb-8 no-scrollbar scroll-smooth snap-x">
+           {relatedItems.length === 0 ? (
+              <div className="w-full text-center py-12 text-zinc-500 italic font-serif">Calculating similar masterpieces...</div>
+           ) : (
+              relatedItems.map((item: any) => (
+                <Link 
+                  to={`/project/${item.id}`} 
+                  key={item.id}
+                  className="min-w-[320px] glass rounded-[2.5rem] overflow-hidden group snap-start"
+                >
+                  <div className="h-48 bg-zinc-900 relative">
+                     <img 
+                       src={JSON.parse(item.photos || '[]')[0] || `https://picsum.photos/seed/rel${item.id}/600/400`}
+                       className="w-full h-full object-cover opacity-50 group-hover:opacity-100 transition-all duration-700 group-hover:scale-110"
+                       referrerPolicy="no-referrer"
+                     />
+                     <div className="absolute top-4 left-4 px-3 py-1 bg-black/50 backdrop-blur-md rounded-full text-[9px] font-black tracking-widest uppercase">
+                        ${item.pricePerDay}/day
+                     </div>
+                  </div>
+                  <div className="p-6">
+                     <h4 className="text-lg font-serif group-hover:text-brand-gold transition-colors truncate">{item.name}</h4>
+                     <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-widest mt-2 flex items-center gap-2">
+                        <MapPin className="w-3 h-3" />
+                        {item.city || 'Global'}
+                     </p>
+                  </div>
+                </Link>
+              ))
+           )}
         </div>
       </div>
     </div>
