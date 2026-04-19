@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useState, useEffect } from 'react';
 import ProjectDetail from './pages/ProjectDetail';
 import ModelSearch from './pages/ModelSearch';
+import UserProfile from './pages/UserProfile';
+import ReviewModal from './components/ReviewModal';
 
 // Placeholder Pages
 const HomePage = () => (
@@ -60,17 +62,47 @@ const HomePage = () => (
 
 const DiscoveryPage = () => {
   const [dbStatus, setDbStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
-  const [locations, setLocations] = useState<any[]>([]);
+  const [items, setItems] = useState<any[]>([]);
+  const [activeCategory, setActiveCategory] = useState<'Locations' | 'Equipment' | 'Models' | 'Crew'>('Locations');
+  
+  // Filter States
+  const [searchQuery, setSearchQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState('ALL');
+  const [priceFilter, setPriceFilter] = useState(5000);
+  const [statusFilter, setStatusFilter] = useState('ALL');
 
-  useEffect(() => {
-    fetch('/api/locations')
+  const fetchItems = () => {
+    const endpoint = activeCategory === 'Locations' ? '/api/locations' : '/api/equipment';
+    const params = new URLSearchParams();
+    
+    if (activeCategory === 'Equipment') {
+      if (searchQuery) params.append('search', searchQuery);
+      if (typeFilter !== 'ALL') params.append('type', typeFilter);
+      if (statusFilter !== 'ALL') params.append('status', statusFilter);
+      params.append('maxPrice', priceFilter.toString());
+    }
+
+    fetch(`${endpoint}${params.toString() ? '?' + params.toString() : ''}`)
       .then(res => res.json())
       .then(data => {
-        setLocations(data);
+        setItems(data);
         setDbStatus('connected');
       })
       .catch(() => setDbStatus('error'));
-  }, []);
+  };
+
+  useEffect(() => {
+    fetchItems();
+  }, [activeCategory, typeFilter, priceFilter, statusFilter]);
+
+  // Handle search with a small debounce or just on blur/submit? 
+  // Let's do a simple effect for search to avoid too many requests
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchItems();
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   return (
     <div className="pt-24 px-6 max-w-7xl mx-auto space-y-12">
@@ -83,51 +115,145 @@ const DiscoveryPage = () => {
           </div>
         </div>
         <div className="flex gap-2">
-        {["Locations", "Equipment", "Models", "Crew"].map(cat => (
-          <button key={cat} className="px-4 py-2 rounded-full border border-white/10 hover:border-brand-gold hover:text-brand-gold transition-all text-sm">
-            {cat}
-          </button>
+          {["Locations", "Equipment", "Models", "Crew"].map(cat => (
+            <button 
+              key={cat} 
+              onClick={() => setActiveCategory(cat as any)}
+              className={cn(
+                "px-6 py-2 rounded-full border transition-all text-sm font-medium",
+                activeCategory === cat 
+                  ? "bg-brand-gold text-black border-brand-gold" 
+                  : "border-white/10 text-zinc-400 hover:border-brand-gold hover:text-brand-gold"
+              )}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Search & Filters Bar */}
+      <div className="glass p-6 rounded-[2.5rem] flex flex-col lg:flex-row gap-6 items-center">
+        <div className="relative flex-1 group">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500 group-focus-within:text-brand-gold transition-colors" />
+          <input 
+            type="text"
+            placeholder={activeCategory === 'Equipment' ? "Search cameras, lighting, audio..." : "Search locations..."}
+            className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 pl-12 pr-4 outline-none focus:border-brand-gold transition-all font-light"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+
+        {activeCategory === 'Equipment' && (
+          <div className="flex flex-wrap items-center gap-4 w-full lg:w-auto">
+            <div className="flex flex-col gap-1.5 min-w-[120px]">
+              <label className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Type</label>
+              <select 
+                className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs outline-none focus:border-brand-gold"
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+              >
+                <option value="ALL">All Types</option>
+                <option value="CAMERA">Cameras</option>
+                <option value="LIGHTING">Lighting</option>
+                <option value="AUDIO">Audio</option>
+                <option value="GRIP">Grip</option>
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1.5 min-w-[120px]">
+              <label className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Availability</label>
+              <select 
+                className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs outline-none focus:border-brand-gold"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="ALL">All Status</option>
+                <option value="AVAILABLE">Available</option>
+                <option value="RENTED">Rented</option>
+                <option value="MAINTENANCE">Maintenance</option>
+              </select>
+            </div>
+
+            <div className="flex-1 lg:min-w-[200px] flex flex-col gap-1.5">
+              <div className="flex justify-between items-center px-1">
+                <label className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">Max Price</label>
+                <span className="text-[10px] font-mono text-brand-gold">${priceFilter}/day</span>
+              </div>
+              <input 
+                type="range" 
+                min="0" 
+                max="5000" 
+                step="50"
+                className="w-full accent-brand-gold h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer"
+                value={priceFilter}
+                onChange={(e) => setPriceFilter(parseInt(e.target.value))}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 pb-32">
+        {items.length === 0 && dbStatus === 'connected' && (
+          <div className="col-span-full py-32 text-center glass rounded-[3rem] space-y-4">
+            <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto">
+              <Package className="w-8 h-8 text-zinc-700" />
+            </div>
+            <p className="text-zinc-500 italic max-w-sm mx-auto">No {activeCategory.toLowerCase()} matching your filters were found.</p>
+            <button 
+              onClick={() => { setSearchQuery(''); setTypeFilter('ALL'); setPriceFilter(5000); setStatusFilter('ALL'); }}
+              className="text-brand-gold text-xs font-bold uppercase tracking-widest hover:underline"
+            >
+              Clear all filters
+            </button>
+          </div>
+        )}
+        {items.map(item => (
+          <Link 
+            to={`/project/${item.id}`}
+            key={item.id} 
+            className="glass rounded-3xl overflow-hidden group cursor-pointer active:scale-95 transition-transform"
+          >
+            <div className="h-64 bg-zinc-900 relative">
+              <img 
+                src={JSON.parse(item.photos || '[]')[0] || `https://picsum.photos/seed/prod${item.id}/800/600`} 
+                className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" 
+                referrerPolicy="no-referrer"
+              />
+              <div className={cn(
+                "absolute top-4 left-4 px-3 py-1 backdrop-blur rounded-full text-[10px] font-mono tracking-widest uppercase",
+                item.status === 'AVAILABLE' || item.status === 'ACTIVE' ? "bg-green-500/20 text-green-400 border border-green-500/20" : "bg-black/50 text-zinc-400"
+              )}>
+                {item.status}
+              </div>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="space-y-1">
+                <div className="flex justify-between items-start">
+                  <h4 className="text-xl font-bold truncate pr-4">{item.name}</h4>
+                  <span className="text-brand-gold font-mono whitespace-nowrap">${item.pricePerDay}/day</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-zinc-500">
+                  {activeCategory === 'Locations' ? <MapPin className="w-3 h-3" /> : <Package className="w-3 h-3" />}
+                  <span>{activeCategory === 'Locations' ? item.city : item.type}</span>
+                </div>
+              </div>
+              <p className="text-zinc-500 text-sm line-clamp-2 leading-relaxed font-light">{item.description}</p>
+              <div className="flex items-center gap-2 pt-2 border-t border-white/5">
+                <div className="w-6 h-6 rounded-full bg-zinc-800 border border-white/10 flex items-center justify-center">
+                  <User className="w-3 h-3 text-zinc-500" />
+                </div>
+                <span className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold">
+                  {item.owner?.displayName || item.company?.displayName || 'Unknown Partner'}
+                </span>
+              </div>
+            </div>
+          </Link>
         ))}
       </div>
     </div>
-    
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-      {locations.length === 0 && dbStatus === 'connected' && (
-        <div className="col-span-full py-20 text-center glass rounded-3xl">
-          <p className="text-zinc-500 italic">No listings found in the database. Use the admin console to add one.</p>
-        </div>
-      )}
-      {locations.map(loc => (
-        <Link 
-          to={`/project/${loc.id}`}
-          key={loc.id} 
-          className="glass rounded-3xl overflow-hidden group cursor-pointer active:scale-95 transition-transform"
-        >
-          <div className="h-64 bg-zinc-900 relative">
-            <img 
-              src={JSON.parse(loc.photos)[0] || `https://picsum.photos/seed/prod${loc.id}/800/600`} 
-              className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" 
-              referrerPolicy="no-referrer"
-            />
-            <div className="absolute top-4 left-4 px-3 py-1 bg-black/50 backdrop-blur rounded-full text-xs font-mono tracking-widest uppercase">
-              {loc.status}
-            </div>
-          </div>
-          <div className="p-6 space-y-2">
-            <div className="flex justify-between items-start">
-              <h4 className="text-xl font-bold truncate pr-4">{loc.name}</h4>
-              <span className="text-brand-gold font-mono">${loc.pricePerDay}/day</span>
-            </div>
-            <p className="text-zinc-500 text-sm line-clamp-2">{loc.description}</p>
-            <div className="flex items-center gap-2 text-xs text-zinc-400 pt-4">
-              <MapPin className="w-3 h-3" />
-              <span>{loc.city} • Owned by {loc.owner?.displayName}</span>
-            </div>
-          </div>
-        </Link>
-      ))}
-    </div>
-  </div>
   );
 };
 
@@ -258,15 +384,26 @@ const AdminDashboard = () => {
 
 const BookingManagement = () => {
   const [bookings, setBookings] = useState<any[]>([]);
+  const [selectedBookingForReview, setSelectedBookingForReview] = useState<any>(null);
 
-  useEffect(() => {
+  const fetchBookings = () => {
     fetch('/api/bookings')
       .then(res => res.json())
       .then(data => setBookings(data));
+  };
+
+  useEffect(() => {
+    fetchBookings();
   }, []);
 
   return (
     <div className="pt-24 px-6 max-w-7xl mx-auto space-y-12 pb-32">
+      <ReviewModal 
+        isOpen={!!selectedBookingForReview}
+        onClose={() => setSelectedBookingForReview(null)}
+        booking={selectedBookingForReview}
+        onSuccess={fetchBookings}
+      />
       <div className="space-y-4">
         <h2 className="text-4xl font-serif">Your Bookings</h2>
         <p className="text-zinc-500">Track and manage your film production reservations.</p>
@@ -295,10 +432,18 @@ const BookingManagement = () => {
                 <div className="text-brand-gold font-mono">${b.totalPrice}</div>
               </div>
             </div>
-            <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tighter ${
-              b.status === 'PENDING' ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20' : 'bg-green-500/10 text-green-500 border border-green-500/20'
-            }`}>
-              {b.status}
+            <div className="flex flex-col items-end gap-3">
+              <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tighter ${
+                b.status === 'PENDING' ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20' : 'bg-green-500/10 text-green-500 border border-green-500/20'
+              }`}>
+                {b.status}
+              </div>
+              <button 
+                onClick={() => setSelectedBookingForReview(b)}
+                className="text-[10px] uppercase font-bold text-brand-gold hover:underline p-1"
+              >
+                Leave Review
+              </button>
             </div>
           </div>
         ))}
@@ -346,6 +491,7 @@ export default function App() {
           <Route path="/talent" element={<ModelSearch />} />
           <Route path="/project/:id" element={<ProjectDetail />} />
           <Route path="/bookings" element={<BookingManagement />} />
+          <Route path="/profile" element={<UserProfile />} />
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="*" element={<div className="pt-32 text-center text-zinc-500 font-serif text-3xl">Coming soon...</div>} />
         </Routes>

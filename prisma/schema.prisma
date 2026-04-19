@@ -49,6 +49,7 @@ model Location {
   updatedAt   DateTime  @updatedAt
 
   bookings    Booking[]
+  reviews     Review[]
 }
 
 model Equipment {
@@ -57,6 +58,7 @@ model Equipment {
   company     User      @relation(fields: [companyId], references: [id])
   name        String
   description String
+  type        String    @default("CAMERA") // CAMERA, LIGHTING, AUDIO, GRIP
   pricePerDay Int
   photos      String    // Stored as JSON string
   status      String    @default("AVAILABLE") // AVAILABLE, RENTED, MAINTENANCE
@@ -64,6 +66,7 @@ model Equipment {
   updatedAt   DateTime  @updatedAt
 
   bookings    Booking[]
+  reviews     Review[]
 }
 
 model Talent {
@@ -81,6 +84,8 @@ model Talent {
   positions   String?  // JSON string
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  reviews     Review[]
 }
 
 model Booking {
@@ -102,12 +107,16 @@ model Booking {
 }
 
 model Review {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   targetId    String
   authorId    String
-  author      User     @relation(fields: [authorId], references: [id])
+  author      User      @relation(fields: [authorId], references: [id])
   authorName  String
   rating      Int
   comment     String
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
+
+  location    Location? @relation(fields: [targetId], references: [id])
+  equipment   Equipment? @relation(fields: [targetId], references: [id])
+  talent      Talent?   @relation(fields: [targetId], references: [id])
 }

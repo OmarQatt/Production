@@ -40,6 +40,25 @@ async function startServer() {
     }
   });
 
+  // Users: Fetch Profile
+  app.get('/api/users/:id', async (req, res) => {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: req.params.id },
+        include: {
+          listings: true,
+          bookings: {
+            orderBy: { createdAt: 'desc' }
+          }
+        }
+      });
+      if (user) res.json(user);
+      else res.status(404).json({ error: 'User not found' });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch user profile' });
+    }
+  });
+
   // Locations: Create
   app.post('/api/locations', async (req, res) => {
     const { ownerId, name, description, type, city, address, pricePerDay, photos } = req.body;
@@ -101,24 +120,71 @@ async function startServer() {
     }
   });
 
-  // Locations: Fetch One
-  app.get('/api/locations/:id', async (req, res) => {
+  // Unified Service Detail API
+  app.get('/api/services/:id', async (req, res) => {
+    const { id } = req.params;
     try {
+      // Try Location
       const location = await prisma.location.findUnique({
-        where: { id: req.params.id },
-        include: { owner: { select: { displayName: true } } }
+        where: { id },
+        include: { 
+          owner: { select: { displayName: true } },
+          reviews: { orderBy: { createdAt: 'desc' } }
+        }
       });
-      if (location) res.json(location);
-      else res.status(404).json({ error: 'Location not found' });
+      if (location) return res.json({ ...location, serviceType: 'LOCATION' });
+
+      // Try Equipment
+      const equipment = await prisma.equipment.findUnique({
+        where: { id },
+        include: { 
+          company: { select: { displayName: true } },
+          reviews: { orderBy: { createdAt: 'desc' } }
+        }
+      });
+      if (equipment) return res.json({ ...equipment, serviceType: 'EQUIPMENT', owner: equipment.company });
+
+      // Try Talent
+      const talent = await prisma.talent.findUnique({
+        where: { id },
+        include: { 
+          user: { select: { displayName: true, photoURL: true } },
+          reviews: { orderBy: { createdAt: 'desc' } }
+        }
+      });
+      if (talent) return res.json({ 
+        ...talent, 
+        serviceType: 'TALENT', 
+        name: talent.user.displayName,
+        owner: { displayName: 'Independent Artist' },
+        photos: JSON.stringify([talent.user.photoURL].filter(Boolean)) 
+      });
+
+      res.status(404).json({ error: 'Service not found' });
     } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch location' });
+      res.status(500).json({ error: 'Failed to fetch service detail' });
     }
   });
 
   // Equipment API
   app.get('/api/equipment', async (req, res) => {
+    const { search, type, status, minPrice, maxPrice } = req.query;
     try {
       const equipment = await prisma.equipment.findMany({
+        where: {
+          AND: [
+            search ? {
+              OR: [
+                { name: { contains: search as string } },
+                { description: { contains: search as string } }
+              ]
+            } : {},
+            type ? { type: type as string } : {},
+            status ? { status: status as string } : {},
+            minPrice ? { pricePerDay: { gte: parseInt(minPrice as string) } } : {},
+            maxPrice ? { pricePerDay: { lte: parseInt(maxPrice as string) } } : {},
+          ]
+        },
         include: { company: { select: { displayName: true } } }
       });
       res.json(equipment);
@@ -145,6 +211,23 @@ async function startServer() {
       res.json(talent);
     } catch (error) {
       res.status(500).json({ error: 'Failed to search talent' });
+    }
+  });
+
+  // Reviews: Create
+  app.post('/api/reviews', async (req, res) => {
+    const { targetId, authorId, authorName, rating, comment } = req.body;
+    try {
+      const review = await prisma.review.create({
+        data: {
+          targetId, authorId, authorName,
+          rating: parseInt(rating),
+          comment
+        }
+      });
+      res.json(review);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to submit review' });
     }
   });
 
@@ -179,6 +262,80 @@ async function startServer() {
         }
       });
       console.log('Mock Admin User Seeded');
+
+      // Seed some initial equipment
+      const equipmentCount = await prisma.equipment.count();
+      if (equipmentCount === 0) {
+        await prisma.equipment.createMany({
+          data: [
+            {
+              id: 'eq-1',
+              companyId: 'admin-1',
+              name: 'ARRI Alexa Mini LF Cinema Package',
+              description: 'Large format cinema camera with complete cage, baseplate, and 1TB media.',
+              type: 'CAMERA',
+              pricePerDay: 850,
+              photos: JSON.stringify(['https://picsum.photos/seed/alexa/800/600']),
+              status: 'AVAILABLE'
+            },
+            {
+              id: 'eq-2',
+              companyId: 'admin-1',
+              name: 'Aputure 600d Pro Light Kit',
+              description: 'High-output daylight balanced LED light with F10 Fresnel and barn doors.',
+              type: 'LIGHTING',
+              pricePerDay: 120,
+              photos: JSON.stringify(['https://picsum.photos/seed/light/800/600']),
+              status: 'AVAILABLE'
+            },
+            {
+              id: 'eq-3',
+              companyId: 'admin-1',
+              name: 'Sennheiser MKH 416 Boom Kit',
+              description: 'Industry standard shotgun microphone with blimp and Carbon Fiber pole.',
+              type: 'AUDIO',
+              pricePerDay: 45,
+              photos: JSON.stringify(['https://picsum.photos/seed/audio/800/600']),
+              status: 'AVAILABLE'
+            }
+          ]
+        });
+        console.log('Equipment seeded');
+      }
+
+      // Seed some initial talent
+      const talentCount = await prisma.talent.count();
+      if (talentCount === 0) {
+        // Create a talent user
+        const talentUser = await prisma.user.upsert({
+          where: { email: 'talent@cinepro.com' },
+          update: {},
+          create: {
+            id: 'talent-1',
+            email: 'talent@cinepro.com',
+            displayName: 'Alexandra V.',
+            role: 'FREELANCER',
+            photoURL: 'https://picsum.photos/seed/model1/600/800'
+          }
+        });
+
+        await prisma.talent.create({
+          data: {
+            id: 'talent-id-1',
+            userId: talentUser.id,
+            type: 'MODEL',
+            experience: '5+ Years',
+            gender: 'Female',
+            age: 24,
+            height: 175,
+            weight: 58,
+            skinTone: 'Fair',
+            city: 'Milan',
+            positions: JSON.stringify(['Fashion', 'Commercial'])
+          }
+        });
+        console.log('Talent seeded');
+      }
     } catch (e) {
       console.warn('Seed failed, user might already exist with different ID');
     }
