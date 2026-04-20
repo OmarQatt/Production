@@ -108,14 +108,69 @@ async function startServer() {
     }
   });
 
-  // Locations: Fetch All (Active)
+  // Locations: Fetch All (Filtered)
   app.get('/api/locations', async (req, res) => {
+    const { search, type, city, minPrice, maxPrice, amenities, startDate, endDate } = req.query;
     try {
+      // Basic filters
+      const where: any = {
+        AND: [
+          search ? {
+            OR: [
+              { name: { contains: search as string } },
+              { description: { contains: search as string } }
+            ]
+          } : {},
+          type && type !== 'ALL' ? { type: type as string } : {},
+          city ? { city: { contains: city as string } } : {},
+          minPrice ? { pricePerDay: { gte: parseInt(minPrice as string) } } : {},
+          maxPrice ? { pricePerDay: { lte: parseInt(maxPrice as string) } } : {},
+          amenities ? { amenities: { contains: amenities as string } } : {},
+        ]
+      };
+
+      // Availability check if dates provided
+      if (startDate && endDate) {
+        where.AND.push({
+          bookings: {
+            none: {
+              AND: [
+                { status: { in: ['PENDING', 'CONFIRMED'] } },
+                {
+                  OR: [
+                    {
+                      AND: [
+                        { startDate: { lte: new Date(startDate as string) } },
+                        { endDate: { gte: new Date(startDate as string) } }
+                      ]
+                    },
+                    {
+                      AND: [
+                        { startDate: { lte: new Date(endDate as string) } },
+                        { endDate: { gte: new Date(endDate as string) } }
+                      ]
+                    },
+                    {
+                      AND: [
+                        { startDate: { gte: new Date(startDate as string) } },
+                        { endDate: { lte: new Date(endDate as string) } }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        });
+      }
+
       const locations = await prisma.location.findMany({
+        where,
         include: { owner: { select: { displayName: true } } }
       });
       res.json(locations);
     } catch (error) {
+      console.error(error);
       res.status(500).json({ error: 'Failed to fetch locations' });
     }
   });
@@ -195,16 +250,20 @@ async function startServer() {
 
   // Talent Search API
   app.get('/api/talent', async (req, res) => {
-    const { type, gender, minAge, maxAge } = req.query;
+    const { type, gender, minAge, maxAge, city, experience, status, role } = req.query;
     try {
       const talent = await prisma.talent.findMany({
         where: {
-          type: type as string || undefined,
-          gender: gender as string || undefined,
-          age: {
-            gte: minAge ? parseInt(minAge as string) : undefined,
-            lte: maxAge ? parseInt(maxAge as string) : undefined,
-          }
+          AND: [
+            type && type !== 'ALL' ? { type: type as string } : {},
+            gender && gender !== 'ALL' ? { gender: gender as string } : {},
+            minAge ? { age: { gte: parseInt(minAge as string) } } : {},
+            maxAge ? { age: { lte: parseInt(maxAge as string) } } : {},
+            city ? { city: { contains: city as string } } : {},
+            experience && experience !== 'ALL' ? { experience: experience as string } : {},
+            status && status !== 'ALL' ? { status: status as string } : {},
+            role ? { positions: { contains: role as string } } : {},
+          ]
         },
         include: { user: { select: { displayName: true, photoURL: true } } }
       });

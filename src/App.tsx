@@ -71,19 +71,28 @@ const DiscoveryPage = () => {
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [priceFilter, setPriceFilter] = useState(5000);
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [cityFilter, setCityFilter] = useState('');
+  const [amenityFilter, setAmenityFilter] = useState('');
+  const [dateRange, setDateRange] = useState({ start: '', end: '' });
 
   const fetchItems = () => {
     const endpoint = activeCategory === 'Locations' ? '/api/locations' : '/api/equipment';
     const params = new URLSearchParams();
     
-    if (activeCategory === 'Equipment') {
-      if (searchQuery) params.append('search', searchQuery);
-      if (typeFilter !== 'ALL') params.append('type', typeFilter);
+    if (searchQuery) params.append('search', searchQuery);
+    if (typeFilter !== 'ALL') params.append('type', typeFilter);
+    params.append('maxPrice', priceFilter.toString());
+
+    if (activeCategory === 'Locations') {
+      if (cityFilter) params.append('city', cityFilter);
+      if (amenityFilter) params.append('amenities', amenityFilter);
+      if (dateRange.start) params.append('startDate', dateRange.start);
+      if (dateRange.end) params.append('endDate', dateRange.end);
+    } else {
       if (statusFilter !== 'ALL') params.append('status', statusFilter);
-      params.append('maxPrice', priceFilter.toString());
     }
 
-    fetch(`${endpoint}${params.toString() ? '?' + params.toString() : ''}`)
+    fetch(`${endpoint}?${params.toString()}`)
       .then(res => res.json())
       .then(data => {
         setItems(data);
@@ -94,7 +103,7 @@ const DiscoveryPage = () => {
 
   useEffect(() => {
     fetchItems();
-  }, [activeCategory, typeFilter, priceFilter, statusFilter]);
+  }, [activeCategory, typeFilter, priceFilter, statusFilter, cityFilter, amenityFilter, dateRange]);
 
   // Handle search with a small debounce or just on blur/submit? 
   // Let's do a simple effect for search to avoid too many requests
@@ -146,7 +155,7 @@ const DiscoveryPage = () => {
           />
         </div>
 
-        {activeCategory === 'Equipment' && (
+        {activeCategory === 'Equipment' ? (
           <div className="flex flex-wrap items-center gap-4 w-full lg:w-auto">
             <div className="flex flex-col gap-1.5 min-w-[120px]">
               <label className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Type</label>
@@ -171,29 +180,69 @@ const DiscoveryPage = () => {
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
                 <option value="ALL">All Status</option>
-                <option value="AVAILABLE">Available</option>
+                <option value="AVAILABLE">Available Now</option>
                 <option value="RENTED">Rented</option>
                 <option value="MAINTENANCE">Maintenance</option>
               </select>
             </div>
-
-            <div className="flex-1 lg:min-w-[200px] flex flex-col gap-1.5">
-              <div className="flex justify-between items-center px-1">
-                <label className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">Max Price</label>
-                <span className="text-[10px] font-mono text-brand-gold">${priceFilter}/day</span>
-              </div>
-              <input 
-                type="range" 
-                min="0" 
-                max="5000" 
-                step="50"
-                className="w-full accent-brand-gold h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer"
-                value={priceFilter}
-                onChange={(e) => setPriceFilter(parseInt(e.target.value))}
-              />
-            </div>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-4 w-full lg:w-auto">
+             <div className="flex flex-col gap-1.5 min-w-[120px]">
+                <label className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 ml-1">City</label>
+                <input 
+                  type="text"
+                  placeholder="e.g. London"
+                  className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs outline-none focus:border-brand-gold"
+                  value={cityFilter}
+                  onChange={(e) => setCityFilter(e.target.value)}
+                />
+             </div>
+             <div className="flex flex-col gap-1.5 min-w-[120px]">
+                <label className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Amenity</label>
+                <input 
+                  type="text"
+                  placeholder="e.g. Parking"
+                  className="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs outline-none focus:border-brand-gold"
+                  value={amenityFilter}
+                  onChange={(e) => setAmenityFilter(e.target.value)}
+                />
+             </div>
+             <div className="flex flex-col gap-1.5 min-w-[200px]">
+                <label className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Availability Dates</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="date"
+                    className="bg-zinc-900 border border-white/10 rounded-xl px-2 py-2 text-[10px] outline-none focus:border-brand-gold"
+                    value={dateRange.start}
+                    onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                  />
+                  <input 
+                    type="date"
+                    className="bg-zinc-900 border border-white/10 rounded-xl px-2 py-2 text-[10px] outline-none focus:border-brand-gold"
+                    value={dateRange.end}
+                    onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                  />
+                </div>
+             </div>
           </div>
         )}
+
+        <div className="flex-1 lg:min-w-[200px] flex flex-col gap-1.5 w-full">
+          <div className="flex justify-between items-center px-1">
+            <label className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">Max Price</label>
+            <span className="text-[10px] font-mono text-brand-gold">${priceFilter}/day</span>
+          </div>
+          <input 
+            type="range" 
+            min="0" 
+            max="5000" 
+            step="50"
+            className="w-full accent-brand-gold h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer"
+            value={priceFilter}
+            onChange={(e) => setPriceFilter(parseInt(e.target.value))}
+          />
+        </div>
       </div>
     
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 pb-32">

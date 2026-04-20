@@ -47,6 +47,7 @@ model Location {
   address     String    // Only visible to admin/employees/owner
   pricePerDay Int
   photos      String    // Stored as JSON string or comma-separated for SQLite
+  amenities   String?   // JSON string of amenities (e.g. WiFi, Parking, Power)
   status      String    @default("PENDING") // PENDING, ACTIVE, INACTIVE
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -85,6 +86,7 @@ model Talent {
   weight      Int?
   city        String
   positions   String?  // JSON string
+  status      String   @default("AVAILABLE") // AVAILABLE, BUSY
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
